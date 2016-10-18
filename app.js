@@ -35,7 +35,7 @@ let hosPool = mysql.createPool({
 });
 
 let authPool = mysql.createPool({
-  host: process.env.AUTH_AUTHT,
+  host: process.env.AUTH_HOST,
   user: process.env.AUTH_USER,
   password: process.env.AUTH_PASSWORD,
   database: process.env.AUTH_DATABASE,
