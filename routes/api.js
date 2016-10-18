@@ -87,6 +87,20 @@ router.post('/hdc/drug-opd', (req, res, next) => {
     });
 })
 
+router.post('/hdc/drug-ipd', (req, res, next) => {
+  let pool = req.hdcPool;
+  let hospcode = req.body.hospcode;
+  let pid = req.body.pid;
+  let an = req.body.an;
+
+  hdc.getDrugIPD(pool, hospcode, pid, an)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
 router.post('/hdc/lab', (req, res, next) => {
   let pool = req.hdcPool;
   let hospcode = req.body.hospcode;
@@ -96,6 +110,38 @@ router.post('/hdc/lab', (req, res, next) => {
   hdc.getLab(pool, hospcode, pid, seq)
     .then(rows => {
       res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/hdc/admission', (req, res, next) => {
+  let pool = req.hdcPool;
+  let hospcode = req.body.hospcode;
+  let pid = req.body.pid;
+  let an = req.body.an;
+
+  console.log(req.body);
+
+  hdc.getAdmission(pool, hospcode, pid, an)
+    .then(admission => {
+      res.send({ ok: true, admission: admission });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/hdc/efs', (req, res, next) => {
+  let pool = req.hdcPool;
+  let hospcode = req.body.hospcode;
+  let pid = req.body.pid;
+  let seq = req.body.seq;
+
+  console.log(req.body);
+
+  hdc.getEFS(pool, hospcode, pid, seq)
+    .then(efs => {
+      res.send({ ok: true, efs: efs });
     }, err => {
       res.send({ok: false, msg: err})
     });

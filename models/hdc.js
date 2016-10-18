@@ -42,12 +42,16 @@ module.exports = {
           from labfu where HOSPCODE=s.HOSPCODE and PID=s.PID and SEQ=s.SEQ
           ) as LABS, (
           select an from admission where HOSPCODE=s.HOSPCODE and PID=s.PID and SEQ=s.SEQ
-          ) as AN
+          ) as AN, (
+            select count(*) as total 
+            from chronicfu where HOSPCODE=s.HOSPCODE and PID=s.PID and SEQ=s.SEQ
+            and RETINA not in ('8', '9') and FOOT not in ('8', '9') 
+          ) as EFS
           from service as s
           left join chospital as h on h.hoscode=s.HOSPCODE
           where concat(s.HOSPCODE, s.PID) IN (${_hpids})
           order by s.DATE_SERV DESC`;
-        // console.log(sql);
+        console.log(sql);
 
         conn.query(sql, (err, rows) => {
           if (err) q.reject(err);
@@ -118,6 +122,31 @@ module.exports = {
     return q.promise;
   },
 
+  getDrugIPD(pool, hospcode, pid, an) {
+    let q = Q.defer();
+    pool.getConnection((err, conn) => {
+      if (err) {
+        console.log(err)
+        q.reject(err)
+      } else {
+        let sql = `select d.DNAME, d.AMOUNT, cu.unit as UNIT, d.DATESTART
+          from drug_ipd as d
+          left join cunit as cu on cu.id_unit=d.UNIT
+          where d.HOSPCODE=? and d.PID=? and d.AN=?
+          order by d.DATESTART ASC`;
+
+        conn.query(sql, [hospcode, pid, an], (err, rows) => {
+          if (err) q.reject(err);
+          else q.resolve(rows)
+        });
+
+        conn.release()
+      }
+    });
+
+    return q.promise;
+  },
+
   getLab(pool, hospcode, pid, seq) {
     let q = Q.defer();
     pool.getConnection((err, conn) => {
@@ -140,5 +169,68 @@ module.exports = {
     });
 
     return q.promise;
+  },
+  
+  getAdmission(pool, hospcode, pid, an) {
+    let q = Q.defer();
+    pool.getConnection((err, conn) => {
+      if (err) {
+        console.log(err)
+        q.reject(err)
+      } else {
+        let sql = `select a.HOSPCODE, h.hosname as HOSPNAME, a.PID, a.SEQ, a.AN, a.DATETIME_ADMIT, a.DATETIME_DISCH,
+        cins.instype_name as INSTYPE_NAME, a.WARDADMIT,
+        cds.dischstatus as DISCHSTATUS_NAME,
+        cdt.disctype as DISCHTYPE_NAME,
+        ipd.CLINIC as DIAG_CODE, icd.diagename as DIAG_NAME,
+        a.REFEROUTHOSP, ho.hosname as REFEROUTHOSP_NAME
+        from admission as a
+        left join cdisctype as cdt on cdt.id_disctype=a.DISCHTYPE
+        left join cdischstatus as cds on cds.id_dischstatus=a.DISCHSTATUS
+        left join cinstype as cins on cins.id_instype=a.INSTYPE
+        left join diagnosis_ipd as ipd on ipd.HOSPCODE=a.HOSPCODE and ipd.PID=a.PID and ipd.SEQ=a.AN and ipd.DIAGCODE="1"
+        left join cicd10tm as icd on icd.diagcode=ipd.CLINIC
+        left join chospital as h on h.hoscode=a.HOSPCODE
+        left join chospital as ho on ho.hoscode=a.REFEROUTHOSP
+        where a.HOSPCODE=? and a.PID=? and a.AN=?
+        order by a.DATETIME_DISCH desc`;
+
+        conn.query(sql, [hospcode, pid, an], (err, rows) => {
+          if (err) q.reject(err);
+          else q.resolve(rows[0])
+        });
+
+        conn.release()
+      }
+    });
+
+    return q.promise;
+  },
+  
+  getEFS(pool, hospcode, pid, seq) {
+    let q = Q.defer();
+    pool.getConnection((err, conn) => {
+      if (err) {
+        console.log(err)
+        q.reject(err)
+      } else {
+        let sql = `select cu.HOSPCODE, cu.PID, cu.SEQ, cu.DATE_SERV, cu.FOOT, cu.RETINA,
+          cf.foot as FOOT_RESULT, cr.retina as RETINA_RESULT
+          from chronicfu as cu
+          left join cfoot as cf on cf.id_foot=cu.FOOT
+          left join cretina as cr on cr.id_retina=cu.RETINA
+          where cu.HOSPCODE=? and cu.PID=? and cu.SEQ=?`;
+
+        conn.query(sql, [hospcode, pid, seq], (err, rows) => {
+          if (err) q.reject(err);
+          else q.resolve(rows[0])
+        });
+
+        conn.release()
+      }
+    });
+
+    return q.promise;
   }
+
 }
