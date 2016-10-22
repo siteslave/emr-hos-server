@@ -3,9 +3,18 @@
 let express = require('express');
 let router = express.Router();
 let moment = require('moment');
+let rimraf = require('rimraf');
+let fse = require('fs-extra');
+let fs = require('fs');
+let path = require('path');
+let pdf = require('html-pdf');
+let jsonData = require('gulp-data');
+let gulp = require('gulp');
+let jade = require('gulp-jade');
 
 let hdc = require('../models/hdc')
-
+let hos = require('../models/hos')
+let lab = require('../models/lab')
 /* GET home page. */
 router.post('/hdc/services', (req, res, next) => {
   let pool = req.hdcPool;
@@ -27,22 +36,6 @@ router.post('/hdc/services', (req, res, next) => {
           // get service history
           hdc.getServices(pool, _hpids)
             .then(rows => {
-              // console.log(rows)
-              // rows.forEach(v => {
-              //   let obj = {};
-              //   obj.HOSPCODE = v.HOSPCODE;
-              //   obj.SEQ = v.SEQ;
-              //   obj.PID = v.PID;
-              //   obj.LABS = v.LABS;
-              //   obj.AN = v.AN;
-              //   obj.ORG_DATE_SERV = v.DATE_SERV;
-              //   obj.DATE_SERV = `${moment(v.DATE_SERV).format('DD/MM')}/${moment(v.DATE_SERV).get('year') + 543}`;
-              //   obj.TIME_SERV = moment(v.TIME_SERV, 'HH:mm:ss').format('HH:mm');
-              //   obj.HOSPNAME = v.HOSPNAME;
-
-              //   _services.push(obj)
-              // });
-
               res.send({ ok: true, rows: rows });
             }, err => {
               console.log(err)
@@ -147,15 +140,163 @@ router.post('/hdc/efs', (req, res, next) => {
     });
 })
 
-// router.get('/test', (req, res, next) => {
-//   hdc.test(req.hdcPool)
-//     .then(rows => {
-//       res.send({ ok: true, rows: rows })
-//     }, err => {
-//       res.send({ ok: false, msg: err })
-//     });
-// });
+//------ HOSxP --------//
 
+router.post('/hos/lab-group', (req, res, next) => {
+  let pool = req.hosPool;
 
+  hos.getLabGroup(pool)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/hos/lab-items', (req, res, next) => {
+  let pool = req.hosPool;
+  let groupId = req.body.groupId;
+
+  hos.getLabItems(pool, groupId)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+// LABS
+
+router.post('/lab/save', (req, res, next) => {
+  let pool = req.iLabPool;
+  let labItems = req.body.labItems;
+  let hospcode = req.body.hospcode;
+  let person = req.body.person;
+
+  // console.log(req.decoded)
+  let userId = req.decoded.id;
+  
+  lab.saveOrder(pool, hospcode, userId, person)
+    .then(orderId => {
+      return lab.saveOrderDetail(pool, orderId, labItems);
+    })
+    .then(() => { 
+      res.send({ok: true})
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/lab/list', (req, res, next) => {
+  let pool = req.iLabPool;
+  let status = req.body.status || 'N';
+  let hospcode = req.body.hospcode;
+
+  lab.getOrderList(pool, hospcode, status)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      console.log(err);
+      res.send({ ok: false, msg: err });
+    });
+})
+
+router.post('/lab/result', (req, res, next) => {
+  let pool = req.hosPool;
+  let vn = req.body.vn;
+
+  lab.getLabResult(pool, vn)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ ok: false, msg: err });
+    })
+})
+
+router.post('/lab/date-list', (req, res, next) => {
+  let pool = req.iLabPool;
+  let hospcode = req.body.hospcode;
+
+  lab.getDateOrderList(pool, hospcode)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ ok: false, msg: err });
+    })
+})
+
+router.get('/lab/result-print', (req, res, next) => {
+  let pool = req.hosPool;
+  let iLabPool = req.iLabPool;
+  let vn = req.query.vn;
+  let orderId = req.query.orderId;
+
+  let json = {};
+
+  fse.ensureDirSync('./templates/html');
+  fse.ensureDirSync('./templates/pdf');
+
+  var destPath = './templates/html/' + moment().format('x');
+  fse.ensureDirSync(destPath);
+
+  lab.getLabOrderDetail(iLabPool, orderId)
+    .then(detail => {
+      json.detail = detail;
+      return lab.getLabResult(pool, vn);
+    })
+    .then(rows => {
+      json.items = rows;
+      gulp.task('html', (cb) => {
+        return gulp.src('./templates/lab-result.jade')
+          .pipe(jsonData(function () {
+            return json;
+          }))
+          .pipe(jade())
+          .pipe(gulp.dest(destPath));
+      });
+
+      gulp.task('pdf', ['html'], () => {
+        let html = fs.readFileSync(destPath + '/lab-result.html', 'utf8')
+        let options = {
+          // format: 'A4',
+          height: "8in",
+          width: "6in",
+          orientation: "portrait",
+          footer: {
+            height: "15mm",
+            contents: '<span style="color: #444;"><small>Printed: ' + new Date() + '</small></span>'
+          }
+        }
+
+        let pdfName = `./templates/pdf/lab-result-${moment().format('x')}.pdf`;
+
+        pdf.create(html, options).toFile(pdfName, (err, resp) => {
+          if (err) {
+            res.send({ ok: false, msg: err });
+          } else {
+            console.log(pdfName)
+            res.download(pdfName, () => {
+              rimraf.sync(destPath);
+              fse.removeSync(pdfName);
+            });
+          }
+        })
+      });
+      
+      gulp.start('pdf');
+
+    }, err => {
+      console.log(err);
+      res.send({ ok: false, msg: err });
+    });
+  
+  
+
+  //////////
+})
+
+router.put('/lab/save', (req, res, next) => {
+
+})
 
 module.exports = router;

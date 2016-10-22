@@ -42,6 +42,18 @@ let authPool = mysql.createPool({
   port: process.env.AUTH_PORT
 });
 
+let iLabPool = mysql.createPool({
+  host: process.env.LAB_HOST,
+  user: process.env.LAB_USER,
+  password: process.env.LAB_PASSWORD,
+  database: process.env.LAB_DATABASE,
+  port: process.env.LAB_PORT
+});
+
+iLabPool.on('connection', (connection) => {
+  connection.query('SET NAMES utf8')
+});
+
 hdcPool.on('connection', (connection) => {
   connection.query('SET NAMES utf8')
 });
@@ -58,6 +70,7 @@ app.use((req, res, next) => {
   req.hosPool = hosPool;
   req.hdcPool = hdcPool;
   req.authPool = authPool;
+  req.iLabPool = iLabPool;
   next();
 });
 // view engine setup
