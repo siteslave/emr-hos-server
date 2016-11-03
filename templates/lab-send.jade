@@ -6,8 +6,8 @@ html
     style.
       html, body {
       margin: 0;
-      padding: 10px;
-      font-size: 14px;
+      padding: 20px 20px 10px 20px;
+      font-size: 16px;
       font-family: 'TH Sarabun New';
       line-height: 85%;
       }
@@ -142,26 +142,27 @@ html
     table.table.table-condensed(style="width: 100%;")
       thead
         tr
-          th(colspan="4", style="text-align: left;")
-            span(style="font-size: 18px;") ผล LAB ของ &nbsp; #{detail.person_fullname} 
+          th(colspan="4", style="text-align: center;")
+            span(style="font-size: 20px;") ใบนำส่งห้องชันสูตร
             br
-            | หน่วยบริการ #{detail.hospcode} - #{detail.hospname}
-            br
-            | ที่อยู่ #{detail.person_address}
+            span(style="font-size: 18px;") วันที่ 
+              strong #{sendDate} 
+              | หน่วยบริการ 
+              strong #{hospcode} - #{hospname}
       tbody
         thead
           tr
-            th ชื่อ LAB
-            th(style="text-align: center; width: 100px;") ผล
-            th(style="width: 150px;") ค่าปกติ
-            th(style="width: 100px;") หน่วย
+            th #
+            th เลขบัตรประชาชน
+            th ชื่อ - สกุล
+            th ที่อยู่
         tbody
 
-          //- - var y = 0
-          for i in items
-            //- - y++
+          - var y = 0
+          for i in patient
+            - y++
             tr
-              td #{i.lab_items_name}
-              td(style="text-align: center; width: 100px;").small-space-line #{i.lab_order_result}
-              td(style="width: 150px;") #{i.lab_items_normal_value}
-              td(style="width: 100px;") #{i.lab_items_unit}
+              td #{y}
+              td #{i.person_cid}
+              td #{i.person_fullname}
+              td #{i.person_address}

@@ -9,6 +9,7 @@ let logger = require('morgan');
 let cookieParser = require('cookie-parser');
 let bodyParser = require('body-parser');
 let mysql = require('mysql');
+let cors = require('cors');
 
 let jwt = require('./models/jwt');
 
@@ -82,6 +83,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.use(cors());
 
 let authToken = (req, res, next) => {
   var token = req.body.token || req.query.token || req.headers['x-access-token'];

@@ -201,6 +201,20 @@ router.post('/lab/list', (req, res, next) => {
     });
 })
 
+router.post('/lab/list-by-date', (req, res, next) => {
+  let pool = req.iLabPool;
+  let hospcode = req.body.hospcode;
+  let date = req.body.date;
+
+  lab.getOrderListByDate(pool, hospcode, date)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      console.log(err);
+      res.send({ ok: false, msg: err });
+    });
+})
+
 router.post('/lab/result', (req, res, next) => {
   let pool = req.hosPool;
   let vn = req.body.vn;
@@ -218,6 +232,19 @@ router.post('/lab/date-list', (req, res, next) => {
   let hospcode = req.body.hospcode;
 
   lab.getDateOrderList(pool, hospcode)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ ok: false, msg: err });
+    })
+})
+
+router.post('/lab/get-send-list', (req, res, next) => {
+  let pool = req.iLabPool;
+  let hospcode = req.body.hospcode;
+  let date = req.body.date;
+
+  lab.getOrderListByDate(pool, hospcode, date)
     .then(rows => {
       res.send({ ok: true, rows: rows });
     }, err => {
@@ -290,13 +317,140 @@ router.get('/lab/result-print', (req, res, next) => {
       res.send({ ok: false, msg: err });
     });
   
-  
+})
 
-  //////////
+router.get('/lab/print-send-list', (req, res, next) => {
+  let pool = req.iLabPool;
+  let hospcode = req.query.hospcode;
+  let date = req.query.date;
+  
+  let json = {};
+
+  json.sendDate = `${moment(date, 'YYYY-MM-DD').locale('th').format('DD MMMM')} ${moment(date, 'YYYY-MM-DD').get('year') + 543}`  
+  fse.ensureDirSync('./templates/html');
+  fse.ensureDirSync('./templates/pdf');
+
+  var destPath = './templates/html/' + moment().format('x');
+  fse.ensureDirSync(destPath);
+
+  // get hospital name
+  lab.getHospitalName(pool, hospcode)
+    .then(hospital => {
+      json.hospcode = hospital.hospcode
+      json.hospname = hospital.hospname
+      return lab.getOrderListByDate(pool, hospcode, date);
+  })
+    .then(rows => {
+      json.patient = rows;
+      gulp.task('html', (cb) => {
+        return gulp.src('./templates/lab-send.jade')
+          .pipe(jsonData(() => {
+            return json;
+          }))
+          .pipe(jade())
+          .pipe(gulp.dest(destPath));
+      });
+
+      gulp.task('pdf', ['html'], () => {
+        let html = fs.readFileSync(destPath + '/lab-send.html', 'utf8')
+        let options = {
+          format: 'A4',
+          // height: "8in",
+          // width: "6in",
+          orientation: "portrait",
+          footer: {
+            height: "15mm",
+            contents: '<span style="color: #444;"><small>Printed: ' + new Date() + '</small></span>'
+          }
+        }
+
+        let pdfName = `./templates/pdf/lab-send-${moment().format('x')}.pdf`;
+
+        pdf.create(html, options).toFile(pdfName, (err, resp) => {
+          if (err) {
+            res.send({ ok: false, msg: err });
+          } else {
+            // console.log(pdfName)
+            res.download(pdfName, () => {
+              rimraf.sync(destPath);
+              fse.removeSync(pdfName);
+            });
+          }
+        })
+      });
+      
+      gulp.start('pdf');
+
+    }, err => {
+      console.log(err);
+      res.send({ ok: false, msg: err });
+    });
+  
+})
+
+/////// for hospital
+router.post('/lab/hos/order-list', (req, res, next) => {
+  let pool = req.iLabPool;
+
+  lab.hospitalGetOrderListAll(pool)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/lab/hos/order-list-confirm', (req, res, next) => {
+  let pool = req.iLabPool;
+  let hospcode = req.body.hospcode;
+  let confirm = req.body.confirm;
+
+  lab.hospitalGetOrderListConfirm(pool, hospcode, confirm)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ok: false, msg: err})
+    });
+})
+
+router.post('/lab/hospital-list', (req, res, next) => {
+  let pool = req.iLabPool;
+  lab.getHospitalList(pool)
+    .then(rows => {
+      res.send({ ok: true, rows: rows });
+    }, err => {
+      res.send({ ok: false, msg: err });
+    });
+})
+
+router.post('/lab/hos/order-lab-item', (req, res, next) => {
+  let pool = req.iLabPool;
+  let orderId = req.body.orderId;
+
+  lab.hospitalGetOrderLabItem(pool, orderId)
+    .then(rows => {
+      let items = [];
+      rows.forEach(v => {
+        items.push(v.lab_items_code)
+      })
+
+      res.send({ok: true, rows: items})
+    }, err => {
+      res.send({ ok: false, msg: err });
+    });
 })
 
 router.put('/lab/save', (req, res, next) => {
+  let pool = req.iLabPool;
+  let orderId = req.body.orderId;
+  let vn = req.body.vn;
 
+  lab.saveOrderResult(pool, orderId, vn)
+    .then(() => {
+      res.send({ok: true})
+    }, err => {
+      res.send({ ok: false, msg: err })
+    });
 })
 
 module.exports = router;
